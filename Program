@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CnCNet AI Command | Tactical Interface</title>
+    
+    <!-- Dependencies -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- SECURITY UPGRADE: Crypto JS for AES -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        titanium: {
+                            950: '#09090b', // Main BG
+                            900: '#18181b', // Cards
+                            800: '#27272a', // Borders
+                            700: '#3f3f46',
+                        },
+                        tactical: {
+                            green: '#10b981', // Emerald 500
+                            greenDim: 'rgba(16, 185, 129, 0.1)',
+                            gold: '#f59e0b',
+                            red: '#ef4444',
+                            glass: 'rgba(255, 255, 255, 0.03)',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        header: ['Orbitron', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'glow-green': '0 0 20px -5px rgba(16, 185, 129, 0.3)',
+                        'glow-red': '0 0 20px -5px rgba(239, 68, 68, 0.4)',
+                        'inner-light': 'inset 0 1px 0 0 rgba(255, 255, 255, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Apple-esque Reset */
+        body { 
+            background-color: #09090b; 
+            color: #e4e4e7;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* App-like feel */
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Fullscreen Takeover Logic */
+        #fullscreen-takeover {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 2147483647 !important; /* Max integer for total overlay */
+            background-color: #09090b;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            pointer-events: auto !important; /* Ensure clicks register */
+        }
+
+        /* The Squircle & Glass Standard */
+        .glass-panel {
+            background: linear-gradient(145deg, rgba(24, 24, 27, 0.9), rgba(9, 9, 11, 0.95));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1.5rem; /* 24px Squircle-ish */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-action {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-action:active { transform: scale(0.98); }
+        
+        /* Custom Scrollbar */
+        .scroller { 
+            overflow-y: auto !important; 
+            scrollbar-width: thin; 
+            scrollbar-color: #4ade80 #27272a; 
+        }
+        .scroller::-webkit-scrollbar { width: 6px; }
+        .scroller::-webkit-scrollbar-thumb { background: #4ade80; border-radius: 4px; }
+        .scroller::-webkit-scrollbar-track { background: #27272a; }
+
+        /* Animation Classes */
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .pulse-border { animation: pulseBorder 2s infinite; }
+        @keyframes pulseBorder { 0% { border-color: rgba(239, 68, 68, 0.2); } 50% { border-color: rgba(239, 68, 68, 0.8); } 100% { border-color: rgba(239, 68, 68, 0.2); } }
+
+        /* Tactical Elements */
+        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .status-active { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+        .status-idle { background-color: #71717a; }
+        .status-ready { background-color: #eab308; box-shadow: 0 0 8px #eab308; } /* Yellow */
+
+        /* Bracket Connections */
+        .bracket-line { stroke: #3f3f46; stroke-width: 2; fill: none; }
+        
+        /* Interactive Player Button */
+        .player-btn {
+            background-color: rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
+        }
+        .player-btn:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+        }
+        .player-btn:active {
+            transform: translateY(0);
+        }
+        
+        /* Page Break for PDF/Panel logic */
+        .bracket-panel {
+            background-color: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- Fullscreen Takeover Wrapper -->
+    <div id="fullscreen-takeover">
+        <!-- App Container -->
+        <div class="flex h-full w-full flex-col md:flex-row p-2 md:p-4 gap-4 max-w-[1920px] mx-auto">
+            
+            <!-- Sidebar Navigation (Left) -->
+            <nav class="w-full md:w-20 lg:w-64 glass-panel flex flex-col justify-between flex-shrink-0 z-20 relative">
+                <div>
+                    <div class="p-6 flex items-center gap-3">
+                        <div class="h-10 w-auto min-w-[3rem] px-3 rounded-lg bg-transparent flex items-center justify-center font-bold">
+                            <img src="https://i.imgur.com/QUmxZKB.png" alt="Logo" class="h-full w-auto object-contain">
+                        </div>
+                        <div class="hidden lg:flex flex-row items-center gap-2 whitespace-nowrap">
+                            <h1 class="font-header text-sm tracking-wider font-bold text-white"></h1>
+                            <p class="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">Manager v1.1</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 space-y-2 relative z-50">
+                        <button onclick="router.navigate('tournament')" id="nav-tournament" class="btn-action w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors group active-nav cursor-pointer relative z-50">
+                            <i class="fas fa-gamepad w-5 text-center transition-colors group-hover:text-tactical-green"></i>
+                            <span class="hidden lg:block">Tournament</span>
+                        </button>
+                        <button onclick="router.navigate('halloffame')" id="nav-halloffame" class="btn-action w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors group cursor-pointer relative z-50">
+                            <i class="fas fa-trophy w-5 text-center transition-colors group-hover:text-tactical-gold"></i>
+                            <span class="hidden lg:block">Hall of Fame</span>
+                        </button>
+                        <button onclick="router.navigate('archive')" id="nav-archive" class="btn-action w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors group cursor-pointer relative z-50">
+                            <i class="fas fa-archive w-5 text-center transition-colors group-hover:text-blue-400"></i>
+                            <span class="hidden lg:block">Archive</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-4 border-t border-white/5 hidden lg:block">
+                    <div class="bg-black/40 rounded-xl p-3 border border-white/5">
+                        <p class="text-[10px] text-zinc-500 uppercase font-mono mb-1">System Status</p>
+                        <div class="flex items-center gap-2">
+                            <span id="sys-status-dot" class="status-dot status-idle"></span>
+                            <span id="sys-status-text" class="text-xs text-zinc-300 font-medium">Offline</span>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Stage (Center) -->
+            <main class="flex-1 glass-panel relative overflow-hidden flex flex-col">
+                
+                <!-- Top Bar -->
+                <header class="h-16 border-b border-white/5 flex items-center justify-between px-6 flex-shrink-0">
+                    <h2 id="page-title" class="font-header text-xl text-white tracking-wide">ACTIVE TOURNAMENT</h2>
+                    <div class="flex items-center gap-4">
+                        <div id="action-area" class="flex gap-2">
+                            <!-- Dynamic Actions render here -->
+                        </div>
+                        <div class="h-8 w-px bg-white/10 mx-2"></div>
+                        <span id="clock" class="font-mono text-xs text-zinc-500">00:00:00 GMT</span>
+                    </div>
+                </header>
+
+                <!-- Views Container -->
+                <div id="viewport" class="flex-1 relative overflow-hidden p-6"> 
+                    
+                    <!-- VIEW: Tournament -->
+                    <div id="view-tournament" class="absolute inset-0 p-6 flex gap-6 fade-in">
+                        <!-- Stage Area -->
+                        <div class="flex-1 flex flex-col h-full">
+                            <!-- Bracket/Group Render -->
+                            <div id="match-area" class="flex-1 relative rounded-2xl border border-white/5 bg-black/20 overflow-auto scroller flex flex-col z-10">
+                                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-center opacity-40 pointer-events-none">
+                                    <i class="fas fa-chess-board text-6xl mb-4 text-zinc-600"></i>
+                                    <p class="font-mono text-sm text-zinc-400">AWAITING BATTLE CONFIGURATION</p>
+                                </div>
+                                
+                                <!-- Groups Container -->
+                                <div id="groups-container" class="w-full p-8 hidden flex-wrap content-start gap-6 flex-shrink-0"></div>
+                                
+                                <!-- Bracket Container -->
+                                <div id="bracket-container" class="w-full hidden p-8 flex-shrink-0 flex-col gap-8 items-center min-h-max">
+                                    <!-- Panels injected here -->
+                                    <div id="bracket-canvas" class="w-full flex flex-col gap-8"></div> 
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Config Panel (Right) -->
+                        <div class="w-80 flex flex-col gap-4 flex-shrink-0 h-full relative z-[200]"> 
+                            <!-- Setup Card -->
+                            <div class="bg-titanium-900/50 rounded-2xl border border-white/5 p-4 flex flex-col gap-3 relative z-50">
+                                <div class="flex justify-between items-center border-b border-white/5 pb-2">
+                                    <span class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Setup</span>
+                                    <button onclick="app.resetConfig()" class="text-[10px] text-zinc-600 hover:text-red-400 transition-colors cursor-pointer relative z-[200]"><i class="fas fa-undo"></i></button>
+                                </div>
+
+                                <!-- Channel Config -->
+                                <div class="bg-black/30 p-2 rounded border border-white/5 mb-1 relative z-50">
+                                    <label class="text-[9px] text-zinc-500 uppercase font-bold block mb-1">Comms Channel</label>
+                                    <div class="flex flex-col gap-2">
+                                        <input type="text" id="inp-channel" placeholder="Channel ID (e.g. ALPHA-1)" class="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-tactical-green font-mono relative z-50">
+                                        <div class="flex gap-2">
+                                            <input type="password" id="inp-password" placeholder="Access Key" class="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-tactical-green font-mono relative z-50">
+                                            <button id="btn-connect" onclick="app.toggleConnection()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-[10px] font-bold transition-colors tracking-wider cursor-pointer relative z-[200]">LINK</button>
+                                        </div>
+                                    </div>
+                                    <p id="channel-status" class="text-[9px] text-zinc-600 mt-1 text-right italic">DISCONNECTED</p>
+                                </div>
+                                
+                                <select id="sel-game" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-tactical-green focus:ring-0 outline-none transition-colors font-mono cursor-pointer relative z-[200]">
+                                    <option value="Tiberian Dawn">Tiberian Dawn</option>
+                                    <option value="Red Alert">Red Alert</option>
+                                    <option value="Tiberian Sun">Tiberian Sun</option>
+                                    <option value="Yuri's Revenge">Yuri's Revenge</option>
+                                </select>
+
+                                <div class="grid grid-cols-2 gap-2 relative z-50">
+                                    <select id="sel-type" class="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono cursor-pointer relative z-[200]">
+                                        <option value="groups">Group</option>
+                                        <option value="single">Single Elim</option>
+                                    </select>
+                                    <select id="sel-format" class="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono cursor-pointer relative z-[200]">
+                                        <option value="1v1">1v1</option>
+                                        <option value="2v2">2v2</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Entrants Card -->
+                            <div class="flex-1 bg-titanium-900/50 rounded-2xl border border-white/5 p-4 flex flex-col overflow-hidden relative z-50">
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Players (<span id="count-entrants">0</span>)</span>
+                                    <button onclick="app.clearEntrants()" class="text-[10px] text-zinc-600 hover:text-red-400 cursor-pointer relative z-[200]"><i class="fas fa-trash"></i></button>
+                                </div>
+                                
+                                <div class="flex gap-2 mb-2 relative z-50">
+                                    <input type="text" id="inp-entrant" placeholder="Cmdr Name..." class="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-tactical-green outline-none font-mono" onkeypress="if(event.key === 'Enter') app.addEntrant()">
+                                    <button onclick="app.addEntrant()" class="bg-white/5 hover:bg-tactical-green hover:text-black text-white w-8 rounded-lg border border-white/10 transition-colors cursor-pointer relative z-[200]"><i class="fas fa-plus text-xs"></i></button>
+                                </div>
+
+                                <ul id="list-entrants" class="flex-1 overflow-y-auto scroller space-y-1 pr-1 relative z-50">
+                                    <!-- Dynamic List -->
+                                </ul>
+                            </div>
+
+                            <!-- Action Button -->
+                            <div class="flex justify-center relative z-[200] mb-4"> <!-- High Z-Index for Start/End Button -->
+                                <button id="btn-state" onclick="app.generateTournament()" class="w-1/2 mx-auto py-2 rounded-2xl bg-gradient-to-r from-tactical-green to-emerald-600 text-black font-header font-bold text-xs hover:brightness-110 active:scale-95 transition-all shadow-glow-green uppercase tracking-widest relative z-[200] cursor-pointer">
+                                    START
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: Hall of Fame -->
+                    <div id="view-halloffame" class="absolute inset-0 p-6 hidden fade-in flex-col h-full z-30"> 
+                        <div class="flex flex-col md:flex-row gap-4 mb-4 items-center flex-shrink-0">
+                            <input type="text" id="hof-search" placeholder="Search Commander..." onkeyup="app.renderHOF()" class="bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:border-tactical-gold outline-none w-64 font-mono">
+                            
+                            <!-- Game Filter -->
+                            <select id="hof-filter-game" onchange="app.renderHOF()" class="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-tactical-gold outline-none font-mono cursor-pointer">
+                                <option value="Global">Global Stats</option>
+                                <option value="Tiberian Dawn">Tiberian Dawn</option>
+                                <option value="Red Alert">Red Alert</option>
+                                <option value="Tiberian Sun">Tiberian Sun</option>
+                                <option value="Yuri's Revenge">Yuri's Revenge</option>
+                            </select>
+
+                            <!-- Year Filter Added -->
+                            <select id="hof-filter-year" onchange="app.renderHOF()" class="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-tactical-gold outline-none font-mono cursor-pointer ml-2">
+                                <option value="ALL">All Years</option>
+                            </select>
+
+                            <!-- Sort Filter REMOVED (Replaced by clickable headers) -->
+
+                            <div class="flex-1"></div>
+                        </div>
+                        <div id="hof-container" class="flex flex-col h-full bg-black/20 border border-white/5 rounded-2xl overflow-hidden min-h-0 relative">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
+
+                    <!-- VIEW: Archive -->
+                    <div id="view-archive" class="absolute inset-0 p-6 hidden fade-in flex-col h-full z-30"> <!-- Added Z-30 -->
+                        <!-- Archive Filters -->
+                        <div class="flex flex-wrap gap-4 mb-4 items-center">
+                            <select id="arch-filter-game" onchange="app.renderArchiveGrid()" class="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-tactical-gold outline-none font-mono cursor-pointer">
+                                <option value="ALL">All Games</option>
+                                <option value="Tiberian Dawn">Tiberian Dawn</option>
+                                <option value="Red Alert">Red Alert</option>
+                                <option value="Tiberian Sun">Tiberian Sun</option>
+                                <option value="Yuri's Revenge">Yuri's Revenge</option>
+                            </select>
+                            <select id="arch-filter-type" onchange="app.renderArchiveGrid()" class="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-tactical-gold outline-none font-mono cursor-pointer">
+                                <option value="ALL">All Types</option>
+                                <option value="single">Single Elim</option>
+                                <option value="groups">Group</option>
+                            </select>
+                            <select id="arch-filter-year" onchange="app.renderArchiveGrid()" class="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-tactical-gold outline-none font-mono cursor-pointer">
+                                <option value="ALL">All Years</option>
+                            </select>
+                        </div>
+
+                        <!-- Archive Grid -->
+                        <div id="archive-container" class="flex-1 relative min-h-0 overflow-hidden flex flex-col h-full"> <!-- Added h-full -->
+                            <!-- Injected by JS -->
+                        </div>
+
+                        <!-- Archive Overlay Viewer -->
+                        <div id="archive-overlay" class="absolute inset-0 bg-titanium-950/95 backdrop-blur-xl z-[70] hidden flex-col p-8" data-active="false"> <!-- Higher Z-Index -->
+                            <div class="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
+                                <div>
+                                    <h3 id="archive-title" class="font-header text-xl text-tactical-gold tracking-wide">ARCHIVE RECORD</h3>
+                                </div>
+                                <div class="flex gap-3">
+                                    <button onclick="app.exportArchivePDF()" class="bg-tactical-red hover:bg-red-600 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer relative z-[70]">
+                                        <i class="fas fa-file-pdf"></i> PDF
+                                    </button>
+                                    <!-- Explicit Inline Close with Display None Force -->
+                                    <button onclick="window.closeArchiveOverlay()" class="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer relative z-[70]">CLOSE</button>
+                                </div>
+                            </div>
+                            <div id="archive-viewer-content" class="flex-1 overflow-auto rounded-xl border border-white/10 bg-black/40 flex flex-col items-center p-8 scroller w-full"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+        // Global App State
+        window.appState = {
+            entrants: [],
+            channelId: null,
+            connected: false,
+            unsubscribe: null,
+            tournament: {
+                active: false,
+                phase: 'setup', 
+                id: null,
+                game: 'Tiberian Dawn',
+                type: 'groups',
+                format: '1v1',
+                matches: [], 
+                groups: [],
+                winner: null,
+                suddenDeath: false,
+                playerCount: 0
+            },
+            history: [],
+            stats: {}, 
+            sync: false,
+            ui: { hofSort: 'rank', hofDir: 'asc' } // Sorting state: Changed to Rank Ascending (#1 Top)
+        };
+
+        const firebaseConfig = { apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
+        let db, auth;
+        const appId = "cncnet-ai-command";
+        
+        // --- SECURITY: AES Key ---
+        // NOTE: In a client-side only app, the key is exposed. 
+        // Ideally this runs on a server.
+        const APP_SECRET = ""; 
+
+        // --- CORE FUNCTIONS ---
+
+        window.onload = async () => {
+            setInterval(() => document.getElementById('clock').innerText = new Date().toLocaleTimeString('en-US', {hour12: false}) + " GMT", 1000);
+            
+            // Initial Views (Empty)
+            app.renderHOF();
+            app.renderArchiveGrid();
+            
+            try {
+                const fApp = initializeApp(firebaseConfig);
+                auth = getAuth(fApp);
+                db = getFirestore(fApp);
+                await signInAnonymously(auth);
+                updateSystemStatus('ready');
+            } catch(e) { console.log("Offline Mode"); }
+        };
+
+        // Explicit Global Close Function for Archive
+        window.closeArchiveOverlay = () => {
+            const overlay = document.getElementById('archive-overlay');
+            if (overlay) {
+                overlay.style.display = 'none'; // Force override
+                overlay.classList.add('hidden');
+            }
+        };
+
+        // Helper: Sanitize inputs to prevent XSS
+        window.escapeHtml = (unsafe) => {
+            if (typeof unsafe !== 'string') return unsafe;
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        };
+
+        function updateSystemStatus(state) {
+            const dot = document.getElementById('sys-status-dot');
+            const text = document.getElementById('sys-status-text');
+            
+            if (state === 'offline') {
+                dot.className = "status-dot status-idle";
+                text.innerText = "Offline";
+                text.className = "text-xs text-zinc-300 font-medium";
+            } else if (state === 'ready') {
+                dot.className = "status-dot status-ready";
+                text.innerText = "Standby";
+                text.className = "text-xs text-yellow-500 font-medium";
+            } else if (state === 'online') {
+                dot.className = "status-dot status-active";
+                text.innerText = "Online (AES)";
+                text.className = "text-xs text-tactical-green font-medium";
+            }
+        }
+
+        window.router = {
+            navigate: (viewId) => {
+                ['tournament', 'halloffame', 'archive'].forEach(v => {
+                    document.getElementById(`view-${v}`).classList.add('hidden');
+                    document.getElementById(`nav-${v}`).classList.remove('active-nav', 'bg-white/5', 'text-white');
+                    document.getElementById(`nav-${v}`).classList.add('text-zinc-400');
+                });
+                document.getElementById(`view-${viewId}`).classList.remove('hidden');
+                
+                const btn = document.getElementById(`nav-${viewId}`);
+                btn.classList.add('active-nav', 'bg-white/5', 'text-white');
+                btn.classList.remove('text-zinc-400');
+                
+                const titles = { 'tournament': 'ACTIVE TOURNAMENT', 'halloffame': 'HALL OF FAME', 'archive': 'ARCHIVE' };
+                document.getElementById('page-title').innerText = titles[viewId];
+
+                if(viewId === 'halloffame') app.renderHOF();
+                if(viewId === 'archive') app.renderArchiveGrid();
+            }
+        };
+
+        window.app = {
+            toggleConnection: async () => {
+                const inp = document.getElementById('inp-channel');
+                const passInp = document.getElementById('inp-password');
+                const btn = document.getElementById('btn-connect');
+                const status = document.getElementById('channel-status');
+
+                if (window.appState.connected) {
+                    // Disconnect
+                    if (window.appState.unsubscribe) window.appState.unsubscribe();
+                    window.appState.connected = false;
+                    window.appState.channelId = null;
+                    window.appState.history = [];
+                    window.appState.stats = {};
+                    
+                    inp.disabled = false;
+                    passInp.disabled = false;
+                    passInp.value = '';
+                    btn.innerText = "LINK";
+                    btn.className = "bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-[10px] font-bold transition-colors tracking-wider";
+                    status.innerText = "DISCONNECTED";
+                    status.className = "text-[9px] text-zinc-600 mt-1 text-right italic";
+                    updateSystemStatus('ready');
+                    
+                    app.renderHOF();
+                    app.renderArchiveGrid();
+                } else {
+                    const channel = window.escapeHtml(inp.value.trim());
+                    const password = passInp.value.trim();
+                    if (!channel || !password) return alert("Enter Channel ID and Access Key");
+                    
+                    status.innerText = "VERIFYING...";
+                    status.className = "text-[9px] text-yellow-500 mt-1 text-right italic animate-pulse";
+
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', channel);
+                    
+                    try {
+                        const docSnap = await getDoc(docRef);
+                        
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            
+                            // --- AES MIGRATION LOGIC ---
+                            let isAuthorized = false;
+
+                            // 1. Check if legacy (plaintext match)
+                            if (data.password === password) {
+                                console.warn("Legacy password detected. Upgrading to AES.");
+                                const encrypted = CryptoJS.AES.encrypt(password, APP_SECRET).toString();
+                                await updateDoc(docRef, { password: encrypted });
+                                isAuthorized = true;
+                            } else {
+                                // 2. Check if encrypted match
+                                try {
+                                    const bytes = CryptoJS.AES.decrypt(data.password, APP_SECRET);
+                                    const decryptedOriginal = bytes.toString(CryptoJS.enc.Utf8);
+                                    if (decryptedOriginal === password) {
+                                        isAuthorized = true;
+                                    }
+                                } catch (e) {
+                                    // Decryption failed or not AES formatted
+                                    isAuthorized = false;
+                                }
+                            }
+
+                            if (!isAuthorized) {
+                                status.innerText = "ACCESS DENIED";
+                                status.className = "text-[9px] text-red-500 mt-1 text-right italic";
+                                alert("Invalid Access Key for this Channel.");
+                                return;
+                            }
+
+                        } else {
+                            // --- NEW CHANNEL SAFEGUARD ---
+                            const confirmCreate = confirm(`Channel ID '${channel}' not found. \n\nDo you want to create a NEW empty channel with this ID? \n\n(Click Cancel if you think you made a typo)`);
+                            
+                            if (!confirmCreate) {
+                                status.innerText = "CANCELLED";
+                                status.className = "text-[9px] text-zinc-600 mt-1 text-right italic";
+                                return;
+                            }
+
+                            // New Channel: Store Encrypted immediately
+                            const encrypted = CryptoJS.AES.encrypt(password, APP_SECRET).toString();
+                            await setDoc(docRef, { 
+                                password: encrypted,
+                                history: [],
+                                stats: {},
+                                lastUpdate: new Date().toISOString()
+                            });
+                        }
+
+                        window.appState.channelId = channel;
+                        inp.disabled = true;
+                        passInp.disabled = true;
+                        btn.innerText = "UNLINK";
+                        btn.className = "bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-[10px] font-bold transition-colors tracking-wider";
+
+                        window.appState.unsubscribe = onSnapshot(docRef, (snap) => {
+                            window.appState.connected = true;
+                            updateSystemStatus('online');
+                            status.innerText = "SECURE LINK ACTIVE";
+                            status.className = "text-[9px] text-tactical-green mt-1 text-right italic";
+                            
+                            if (snap.exists()) {
+                                const data = snap.data();
+                                let loadedHistory = data.history || [];
+                                
+                                console.log(`[CnCNet Audit] Loaded ${loadedHistory.length} history items for channel: ${channel}`);
+                                
+                                loadedHistory = loadedHistory.map(h => {
+                                    if (typeof h.matches === 'string') {
+                                        try { h.matches = JSON.parse(h.matches); } catch(e) { console.error("Parse matches error", e); }
+                                    }
+                                    return h;
+                                });
+                                window.appState.history = loadedHistory;
+                                window.appState.stats = data.stats || {};
+                                
+                                console.log(`[CnCNet Audit] Loaded stats for ${Object.keys(window.appState.stats).length} commanders.`);
+                            } else {
+                                window.appState.history = [];
+                                window.appState.stats = {};
+                            }
+                            
+                            if(!document.getElementById('view-halloffame').classList.contains('hidden')) app.renderHOF();
+                            if(!document.getElementById('view-archive').classList.contains('hidden')) app.renderArchiveGrid();
+                        }, (error) => {
+                            console.error("Link Error:", error);
+                            alert("Connection Lost. Reconnecting...");
+                            app.toggleConnection(); 
+                        });
+
+                    } catch (e) {
+                        console.error("Connection Error", e);
+                        alert("Connection Failed: " + e.message);
+                        status.innerText = "ERROR";
+                        status.className = "text-[9px] text-red-500 mt-1 text-right italic";
+                    }
+                }
+            },
+
+            // ... (Entrant Management same as before) ...
+            addEntrant: () => {
+                // Limit to 128
+                if (window.appState.entrants.length >= 128) return alert("Maximum 128 players reached");
+                const inp = document.getElementById('inp-entrant');
+                const name = window.escapeHtml(inp.value.trim()); // Sanitized
+                if(name && !window.appState.entrants.includes(name)) {
+                    window.appState.entrants.push(name);
+                    inp.value = "";
+                    app.renderEntrants();
+                    if(!window.appState.stats[name]) app.initPlayerStats(name);
+                }
+            },
+            removeEntrant: (idx) => {
+                window.appState.entrants.splice(idx, 1);
+                app.renderEntrants();
+            },
+            clearEntrants: () => {
+                window.appState.entrants = [];
+                app.renderEntrants();
+            },
+            renderEntrants: () => {
+                const list = document.getElementById('list-entrants');
+                document.getElementById('count-entrants').innerText = window.appState.entrants.length;
+                list.innerHTML = window.appState.entrants.map((p, i) => `
+                    <li class="flex justify-between items-center bg-black/20 p-2 rounded-lg border border-white/5 group">
+                        <span class="text-xs text-zinc-300 font-mono"><span class="text-zinc-600 mr-2">${i+1}</span>${p}</span>
+                        <button onclick="app.removeEntrant(${i})" class="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"><i class="fas fa-times"></i></button>
+                    </li>
+                `).join('');
+            },
+            initPlayerStats: (name) => {
+                if (!window.appState.stats[name]) {
+                    window.appState.stats[name] = { 
+                        global: { elo: 1200, wins: 0, losses: 0 },
+                        games: {} 
+                    };
+                }
+            },
+
+            // ... (Tournament Logic) ...
+            generateTournament: () => {
+                const s = window.appState;
+                if(s.entrants.length < 2) return alert("Insufficient Commanders");
+
+                s.tournament = {
+                    active: true,
+                    phase: 'active',
+                    id: Date.now(),
+                    game: document.getElementById('sel-game').value,
+                    type: document.getElementById('sel-type').value,
+                    format: document.getElementById('sel-format').value,
+                    matches: [],
+                    groups: [],
+                    winner: null,
+                    suddenDeath: false, // Implicit in Group mode now
+                    playerCount: s.entrants.length
+                };
+
+                let pool = [...s.entrants]; 
+                
+                if(s.tournament.type === 'single') {
+                    app.setupBracket(pool);
+                    document.getElementById('groups-container').classList.add('hidden');
+                    document.getElementById('bracket-container').classList.remove('hidden');
+                    app.renderBracket(); // Uses panel logic
+                } else {
+                    app.setupGroups(pool);
+                    
+                    s.tournament.suddenDeath = true; 
+                    const groupCount = Math.ceil(pool.length / 4);
+                    // Create placeholders for bracket
+                    let placeholders = [];
+                    for(let i=0; i<groupCount; i++) {
+                        // Use getGroupName helper to fix \ error
+                        placeholders.push(`Winner G${getGroupName(i)}`);
+                    }
+                    app.setupBracket(placeholders, true); 
+                    
+                    if (groupCount === 1) {
+                         s.tournament.suddenDeath = false; // No auto-bracket for 1 group
+                         document.getElementById('bracket-container').classList.add('hidden');
+                    } else {
+                         document.getElementById('bracket-container').classList.remove('hidden'); 
+                         app.renderBracket(); 
+                    }
+
+                    document.getElementById('groups-container').classList.remove('hidden');
+                    document.getElementById('groups-container').style.display = 'flex'; 
+                    app.renderGroups();
+                }
+
+                document.getElementById('empty-state').style.display = 'none';
+                const btn = document.getElementById('btn-state');
+                btn.classList.add('hidden'); // Hide start button
+            },
+
+            setupBracket: (pool, isPlaceholder = false) => {
+                if(!isPlaceholder) {
+                    const gameName = window.appState.tournament.game;
+                    pool.sort((a, b) => {
+                        const statsA = window.appState.stats[a] || { global: { elo: 1200 }, games: {} };
+                        const statsB = window.appState.stats[b] || { global: { elo: 1200 }, games: {} };
+                        const eloA = statsA.games[gameName]?.elo || statsA.global.elo || 1200;
+                        const eloB = statsB.games[gameName]?.elo || statsB.global.elo || 1200;
+                        return eloB - eloA;
+                    });
+                }
+
+                const size = Math.pow(2, Math.ceil(Math.log2(pool.length)));
+                const visualIndices = getVisualSeedOrder(size);
+                
+                let flatBracket = [];
+                for(let i=0; i<visualIndices.length; i++) {
+                    const seedRank = visualIndices[i];
+                    if (seedRank < pool.length) {
+                        flatBracket.push(pool[seedRank]);
+                    } else {
+                        flatBracket.push('BYE');
+                    }
+                }
+
+                let matches = [];
+                let round1 = [];
+                for(let i=0; i<size; i+=2) {
+                    let p1 = flatBracket[i];
+                    let p2 = flatBracket[i+1];
+                    let winner = null;
+                    if(p2 === 'BYE') winner = p1;
+                    if(p1 === 'BYE') winner = p2; 
+                    round1.push({ id: `r1-m${i/2}`, p1, p2, winner });
+                }
+                matches.push(round1);
+
+                let currentSize = size/4; 
+                let roundNum = 2;
+                while(currentSize >= 1) {
+                    let round = [];
+                    for(let i=0; i < currentSize; i++) {
+                        round.push({ id: `r${roundNum}-m${i}`, p1: null, p2: null, winner: null });
+                    }
+                    matches.push(round);
+                    currentSize /= 2;
+                    roundNum++;
+                }
+                
+                round1.forEach((m, idx) => {
+                   if(m.winner && matches.length > 1) {
+                       const nextMatch = matches[1][Math.floor(idx/2)];
+                       if(idx % 2 === 0) nextMatch.p1 = m.winner;
+                       else nextMatch.p2 = m.winner;
+                   } 
+                });
+
+                window.appState.tournament.matches = matches;
+            },
+
+            setupGroups: (pool) => {
+                const groupCount = Math.ceil(pool.length / 4);
+                let groups = [];
+                for(let i=0; i<groupCount; i++) {
+                    // Use getGroupName for group ID
+                    groups.push({ name: getGroupName(i), players: [], matches: [], standings: {} });
+                }
+                
+                pool.forEach((p, i) => {
+                    let gIdx = i % groupCount;
+                    if (Math.floor(i / groupCount) % 2 === 1) {
+                        gIdx = (groupCount - 1) - gIdx;
+                    }
+                    groups[gIdx].players.push(p);
+                    groups[gIdx].standings[p] = { pts: 0, w: 0, l: 0 };
+                });
+
+                groups.forEach(g => {
+                    for(let i=0; i<g.players.length; i++) {
+                        for(let j=i+1; j<g.players.length; j++) {
+                            g.matches.push({ id: `g${g.name}-${i}${j}`, p1: g.players[i], p2: g.players[j], winner: null });
+                        }
+                    }
+                });
+                window.appState.tournament.groups = groups;
+            },
+
+            // New Helper: Render Groups in Panels of 3 with Matches
+            renderGroupPanels: (groups, containerId, winnerName, showTrophy) => {
+                const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
+                if(!container) return;
+                
+                const chunkSize = 3;
+                for (let i = 0; i < groups.length; i += chunkSize) {
+                    const chunk = groups.slice(i, i + chunkSize);
+                    
+                    const panelDiv = document.createElement('div');
+                    panelDiv.className = "bracket-panel w-full bg-black/40 border border-white/5 rounded-xl p-4 mb-8";
+                    panelDiv.innerHTML = `<h4 class="text-tactical-green font-header text-sm mb-4 text-center tracking-widest border-b border-white/5 pb-2">Group Stage - Page ${Math.floor(i/chunkSize)+1}</h4>`;
+                    
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = "flex flex-wrap gap-4 justify-center";
+                    
+                    chunk.forEach(g => {
+                          const sorted = Object.entries(g.standings).sort((a,b) => b[1].pts - a[1].pts);
+                          
+                          // Create Match List
+                          const matchesHtml = g.matches.map(m => {
+                              const p1Style = m.winner === m.p1 ? 'text-tactical-green font-bold' : 'text-zinc-400';
+                              const p2Style = m.winner === m.p2 ? 'text-tactical-green font-bold' : 'text-zinc-400';
+                              return `
+                                <div class="flex justify-between text-[10px] bg-black/40 p-1 mb-1 rounded border border-white/5">
+                                    <span class="${p1Style} truncate w-20">${m.p1}</span>
+                                    <span class="text-zinc-600">vs</span>
+                                    <span class="${p2Style} truncate w-20 text-right">${m.p2}</span>
+                                </div>
+                              `;
+                          }).join('');
+
+                          // Check if winner is in this group (Single Group Mode)
+                          // showTrophy is true for single group mode
+                          contentDiv.innerHTML += `
+                            <div class="bg-black/60 border border-white/10 rounded-xl p-4 w-72 mb-4 flex flex-col">
+                                <h5 class="text-tactical-gold font-header text-sm mb-2 border-b border-white/5 pb-1">Group ${g.name}</h5>
+                                <table class="w-full text-xs text-zinc-400 mb-2">
+                                    ${sorted.map(([n,s]) => `<tr><td class="text-white">${n} ${(showTrophy && n === winnerName) ? '<i class="fas fa-trophy text-yellow-400 ml-1"></i>' : ''}</td><td class="text-right">${s.w}-${s.l}</td><td class="text-right font-bold text-tactical-green">${s.pts}</td></tr>`).join('')}
+                                </table>
+                                <div class="mt-2 pt-2 border-t border-white/5">
+                                    ${matchesHtml}
+                                </div>
+                            </div>
+                          `;
+                    });
+                    
+                    panelDiv.appendChild(contentDiv);
+                    container.appendChild(panelDiv);
+                }
+            },
+
+            // Unified Render Logic: Generates Panels
+            renderBracketPanels: (matches, containerId, isInteractive, isGroupTournament = false) => {
+                const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
+                if(!container) return;
+                // Don't clear if appending to existing (like Archive) - actually archive passes empty div
+                // If isInteractive (Active Tournament), we want to clear.
+                if(isInteractive) container.innerHTML = '';
+                
+                if(!matches || matches.length === 0) return;
+                
+                const r1Matches = matches[0].length;
+                let panels = [];
+
+                if (r1Matches <= 4) {
+                    // Small Tournament: 1 Panel
+                    let title = isGroupTournament ? "Championship Rounds" : "Tournament Bracket";
+                    panels.push({ name: title, start: 0, end: r1Matches - 1, rounds: matches.length });
+                } else if (r1Matches <= 8) {
+                    // 16 Players: 3 Panels (Top, Bottom, Finals)
+                    panels.push({ name: "Top Bracket", start: 0, end: 3, rounds: 2 }); // Rounds 1 & 2
+                    panels.push({ name: "Bottom Bracket", start: 4, end: 7, rounds: 2 });
+                    panels.push({ name: "Championship Phase", start: 0, end: 0, isFinals: true });
+                } else {
+                    // 32+ Players: Quadrants + Finals
+                    const qSize = 4;
+                    const qCount = Math.ceil(r1Matches / qSize);
+                    for(let q=0; q<qCount; q++) {
+                        let pName = qCount > 4 ? `Bracket Section ${q+1}` : `Bracket Quadrant ${q+1}`;
+                        panels.push({ name: pName, start: q*qSize, end: (q*qSize)+3, rounds: 3 }); 
+                    }
+                    panels.push({ name: "Championship Phase", start: 0, end: 0, isFinals: true });
+                }
+
+                panels.forEach(panel => {
+                    const pDiv = document.createElement('div');
+                    pDiv.className = "bracket-panel w-full bg-black/40 border border-white/5 rounded-xl p-4 mb-8";
+                    
+                    // Header
+                    pDiv.innerHTML = `<h4 class="text-tactical-green font-header text-sm mb-4 text-center tracking-widest border-b border-white/5 pb-2">${panel.name}</h4>`;
+                    
+                    const treeContainer = document.createElement('div');
+                    treeContainer.className = "flex justify-around items-center w-full"; 
+                    
+                    // Dynamic Min Height for Tree Spacing
+                    const matchesInRound = panel.isFinals ? matches[matches.length-1].length : (panel.end - panel.start + 1);
+                    const firstRoundMatches = panel.isFinals ? matches[matches.length - (r1Matches >= 16 ? 2 : 2)].length : (panel.end - panel.start + 1);
+                    treeContainer.style.minHeight = Math.max(300, firstRoundMatches * 150) + "px";
+
+                    // Logic to render partial tree
+                    if (panel.isFinals) {
+                        // Correct Championship Phase Start Round
+                        let startRound = r1Matches > 8 ? 3 : 2; // R4 for 32+, R3 for 16
+                        
+                        // Safety bound
+                        if(startRound >= matches.length) startRound = matches.length - 1; 
+
+                        for(let r=startRound; r<matches.length; r++) {
+                            const round = matches[r];
+                            const roundDiv = document.createElement('div');
+                            roundDiv.className = "flex flex-col justify-around h-full flex-1 items-center"; 
+                            
+                            // Round Header
+                            let rName = `Round ${r+1}`;
+                            const totalRounds = matches.length;
+                            if(r === totalRounds-1) rName = "Final";
+                            else if(r === totalRounds-2) rName = "Semi-Finals";
+                            else if(r === totalRounds-3) rName = "Quarter-Finals";
+                            else if(r === totalRounds-4) rName = "Last 16"; // Changed from Eighth-Finals
+                            
+                            roundDiv.innerHTML += `<div class="text-[10px] text-zinc-500 mb-2 font-mono uppercase tracking-wider">${rName}</div>`;
+                            
+                            const matchCol = document.createElement('div');
+                            matchCol.className = "flex flex-col justify-around flex-1 w-full items-center h-full";
+
+                            round.forEach((m, idx) => {
+                                // Trophy Logic Fix: Only for Winner of Grand Final
+                                const isGrandFinal = (r === matches.length - 1);
+                                matchCol.innerHTML += app.createMatchHTML(m, r, idx, isInteractive, isGrandFinal); 
+                            });
+                            roundDiv.appendChild(matchCol);
+                            treeContainer.appendChild(roundDiv);
+                        }
+                    } else {
+                        // Render Quadrant
+                        for(let r=0; r<panel.rounds; r++) {
+                            if (r >= matches.length) break;
+                            const round = matches[r];
+                            const divisor = Math.pow(2, r);
+                            const rStart = Math.floor(panel.start / divisor);
+                            const rEnd = Math.floor(panel.end / divisor);
+
+                            const roundDiv = document.createElement('div');
+                            roundDiv.className = "flex flex-col justify-around h-full flex-1 items-center"; 
+
+                            let rName = `Round ${r+1}`;
+                            const totalRounds = matches.length;
+                             if(r === totalRounds-1) rName = "Final";
+                            else if(r === totalRounds-2) rName = "Semi-Finals";
+                            else if(r === totalRounds-3) rName = "Quarter-Finals";
+
+                            roundDiv.innerHTML += `<div class="text-[10px] text-zinc-500 mb-2 font-mono uppercase tracking-wider">${rName}</div>`;
+                            
+                            const matchCol = document.createElement('div');
+                            matchCol.className = "flex flex-col justify-around flex-1 w-full items-center h-full";
+
+                            for(let mIdx=rStart; mIdx<=rEnd; mIdx++) {
+                                if(round[mIdx]) {
+                                    // Trophy fix for small tournaments where panel is not "Finals" but contains the final
+                                    const isLastRound = (r === matches.length - 1);
+                                    matchCol.innerHTML += app.createMatchHTML(round[mIdx], r, mIdx, isInteractive, isLastRound);
+                                }
+                            }
+                            roundDiv.appendChild(matchCol);
+                            treeContainer.appendChild(roundDiv);
+                        }
+                    }
+                    
+                    pDiv.appendChild(treeContainer);
+                    container.appendChild(pDiv);
+                });
+            },
+
+            createMatchHTML: (m, r, idx, interactive, isGrandFinal) => {
+                const p1Class = m.winner === m.p1 ? 'text-tactical-green font-bold shadow-[0_0_10px_rgba(16,185,129,0.2)]' : (m.winner ? 'text-zinc-600 opacity-60' : 'text-zinc-300');
+                const p2Class = m.winner === m.p2 ? 'text-tactical-green font-bold shadow-[0_0_10px_rgba(16,185,129,0.2)]' : (m.winner ? 'text-zinc-600 opacity-60' : 'text-zinc-300');
+                const borderClass = m.winner ? 'border-tactical-green shadow-glow-green' : 'border-white/10';
+                
+                const click1 = interactive ? `onclick="app.setWinner('${m.id}', '${m.p1}')"` : '';
+                const click2 = interactive ? `onclick="app.setWinner('${m.id}', '${m.p2}')"` : '';
+                
+                const trophy = '<i class="fas fa-trophy text-yellow-400 ml-2"></i>';
+                const check = '<i class="fas fa-check text-[8px]"></i>';
+
+                return `
+                    <div class="w-48 bg-titanium-900 border ${borderClass} rounded-xl p-1 relative z-10 transition-all mb-4">
+                        <button ${click1} class="player-btn w-full cursor-pointer px-2 py-2 rounded-lg mb-1 flex justify-between items-center text-xs ${p1Class} pointer-events-auto">
+                            <span class="truncate text-left flex-1">${m.p1 || '---'}</span>
+                            ${m.winner === m.p1 ? (isGrandFinal ? trophy : check) : ''}
+                        </button>
+                        <div class="h-px bg-white/5 my-0.5 mx-1"></div>
+                        <button ${click2} class="player-btn w-full cursor-pointer px-2 py-2 rounded-lg mt-1 flex justify-between items-center text-xs ${p2Class} pointer-events-auto">
+                            <span class="truncate text-left flex-1">${m.p2 || '---'}</span>
+                            ${m.winner === m.p2 ? (isGrandFinal ? trophy : check) : ''}
+                        </button>
+                    </div>
+                `;
+            },
+
+            // Shim for existing calls
+            renderBracket: () => {
+                app.renderBracketPanels(window.appState.tournament.matches, 'bracket-canvas', true);
+            },
+
+            // ... (Groups & Logic same as before) ...
+            renderGroups: () => {
+                // ... logic same ...
+                 const container = document.getElementById('match-area');
+                const scrollPos = container ? container.scrollTop : 0;
+                
+                const c = document.getElementById('groups-container');
+                c.innerHTML = '';
+                
+                window.appState.tournament.groups.forEach(g => {
+                    const sorted = Object.entries(g.standings).sort((a,b) => b[1].pts - a[1].pts);
+                    
+                    let html = `
+                        <div class="glass-panel w-80 p-4 flex flex-col gap-4 flex-shrink-0">
+                            <div class="flex justify-between items-center border-b border-white/5 pb-2">
+                                <h3 class="font-header text-tactical-gold text-lg">GROUP ${g.name}</h3>
+                            </div>
+                            <table class="w-full text-xs font-mono text-zinc-400">
+                                <tr class="text-zinc-600 text-[10px] uppercase"><th class="text-left">Op</th><th>W</th><th>L</th><th class="text-right">Pts</th></tr>
+                                ${sorted.map(([name, s]) => `
+                                    <tr class="border-b border-white/5">
+                                        <td class="py-1 text-white">${name}</td>
+                                        <td class="text-center text-tactical-green">${s.w}</td>
+                                        <td class="text-center text-red-400">${s.l}</td>
+                                        <td class="text-right font-bold text-white">${s.pts}</td>
+                                    </tr>
+                                `).join('')}
+                            </table>
+                            <div class="space-y-1 pr-1 pb-2">
+                                ${g.matches.map(m => {
+                                    const p1Style = m.winner === m.p1 ? 'text-tactical-green font-bold' : '';
+                                    const p2Style = m.winner === m.p2 ? 'text-tactical-green font-bold' : '';
+                                    return `
+                                        <div class="flex items-center justify-between bg-black/40 p-2 rounded border border-white/5 text-xs gap-2">
+                                            <button onclick="app.setGroupWinner('${m.id}', '${m.p1}')" class="flex-1 text-left cursor-pointer hover:bg-white/10 p-2 rounded transition-colors truncate ${p1Style} pointer-events-auto">${m.p1}</button>
+                                            <span class="text-zinc-600 text-[10px]">VS</span>
+                                            <button onclick="app.setGroupWinner('${m.id}', '${m.p2}')" class="flex-1 text-right cursor-pointer hover:bg-white/10 p-2 rounded transition-colors truncate ${p2Style} pointer-events-auto">${m.p2}</button>
+                                        </div>
+                                    `
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                    c.innerHTML += html;
+                });
+                
+                if(container) setTimeout(() => container.scrollTop = scrollPos, 0);
+            },
+
+            setWinner: (mid, winnerName) => {
+                if(!winnerName || winnerName === 'null' || winnerName === 'BYE' || winnerName.includes('Winner G')) return;
+                
+                const tm = window.appState.tournament;
+                let found = false;
+                let rIdx = -1, mIdx = -1;
+
+                tm.matches.forEach((r, ri) => {
+                    r.forEach((m, mi) => {
+                        if(m.id === mid) {
+                            m.winner = winnerName;
+                            rIdx = ri; mIdx = mi;
+                            found = true;
+                        }
+                    });
+                });
+
+                if(found && rIdx < tm.matches.length - 1) {
+                    const nextMatch = tm.matches[rIdx+1][Math.floor(mIdx/2)];
+                    if(mIdx % 2 === 0) nextMatch.p1 = winnerName; else nextMatch.p2 = winnerName;
+                    
+                    const clearDownstream = (roundIndex, matchIndex) => {
+                         if (roundIndex >= tm.matches.length - 1) return;
+                         const nMatch = tm.matches[roundIndex + 1][Math.floor(matchIndex/2)];
+                         if (nMatch.winner) {
+                             nMatch.winner = null;
+                             clearDownstream(roundIndex + 1, Math.floor(matchIndex/2));
+                         }
+                    };
+                    if (nextMatch.winner) {
+                        nextMatch.winner = null;
+                        clearDownstream(rIdx + 1, Math.floor(mIdx/2));
+                    }
+                }
+                
+                app.renderBracket();
+                app.checkCompletion();
+            },
+
+            setGroupWinner: (mid, winnerName) => {
+                const tm = window.appState.tournament;
+                let group;
+                
+                tm.groups.forEach(g => {
+                    const m = g.matches.find(x => x.id === mid);
+                    if(m) { m.winner = winnerName; group = g; }
+                });
+
+                if(group) {
+                    Object.keys(group.standings).forEach(k => group.standings[k] = {pts:0, w:0, l:0});
+                    group.matches.forEach(m => {
+                        if(m.winner) {
+                            const loser = m.winner === m.p1 ? m.p2 : m.p1;
+                            group.standings[m.winner].w++;
+                            group.standings[m.winner].pts += 3;
+                            group.standings[loser].l++;
+                        }
+                    });
+                    
+                    const allMatchesDone = group.matches.every(m => m.winner);
+                    if(allMatchesDone) {
+                        const s = Object.entries(group.standings).sort((a,b) => b[1].pts - a[1].pts);
+                        const winner = s[0][0];
+                        const placeholderName = `Winner G${group.name.replace('Group ', '')}`; // Correct placeholder
+                        let bracketUpdated = false;
+                        tm.matches[0].forEach(m => {
+                            if(m.p1 && m.p1.includes(placeholderName)) { m.p1 = winner; bracketUpdated = true; }
+                            if(m.p2 && m.p2.includes(placeholderName)) { m.p2 = winner; bracketUpdated = true; }
+                        });
+                        
+                        if(bracketUpdated) {
+                             tm.matches[0].forEach((m, idx) => {
+                                let w = m.p2 === 'BYE' ? m.p1 : (m.p1 === 'BYE' ? m.p2 : null);
+                                if (w && !w.includes('Winner G')) {
+                                    m.winner = w;
+                                    if(tm.matches.length > 1) {
+                                       const nextM = tm.matches[1][Math.floor(idx/2)];
+                                       if(idx%2===0) nextM.p1 = w; else nextM.p2 = w;
+                                    }
+                                }
+                             });
+                        }
+                    }
+
+                    app.renderGroups();
+                    app.renderBracket(); 
+                    app.checkCompletion();
+                }
+            },
+
+            checkCompletion: () => {
+                const t = window.appState.tournament;
+                const btn = document.getElementById('btn-state');
+                
+                let allGroupsDone = true;
+                if (t.type === 'groups') {
+                    allGroupsDone = t.groups.every(g => g.matches.every(m => m.winner));
+                }
+
+                let allBracketDone = true;
+                if (t.matches && t.matches.length > 0) {
+                     const finalMatch = t.matches[t.matches.length-1][0];
+                     if (!finalMatch || !finalMatch.winner) allBracketDone = false;
+                }
+
+                if(allGroupsDone && allBracketDone) {
+                      btn.innerText = "FINISH & SAVE";
+                      btn.onclick = app.finalizeTournament;
+                      btn.className = "w-1/2 mx-auto py-2 rounded-2xl bg-gradient-to-r from-red-600 to-red-800 text-white font-header font-bold text-xs hover:brightness-110 active:scale-95 transition-all shadow-glow-red uppercase tracking-widest relative z-[200] cursor-pointer";
+                      btn.classList.remove('hidden');
+                } else {
+                    btn.classList.add('hidden');
+                }
+            },
+
+            finalizeTournament: async () => {
+                if(!window.appState.connected) {
+                    alert("Must be linked to a channel to save results.");
+                    return;
+                }
+
+                const t = window.appState.tournament;
+                // Final match winner is tournament winner
+                if (t.type === 'groups' && t.groups.length === 1) {
+                    const g = t.groups[0];
+                    const s = Object.entries(g.standings).sort((a,b) => b[1].pts - a[1].pts);
+                    t.winner = s[0][0]; // Top player
+                } else {
+                    const finalMatch = t.matches[t.matches.length-1][0];
+                    t.winner = finalMatch.winner;
+                }
+                
+                t.phase = 'finished';
+
+                const record = JSON.parse(JSON.stringify(t));
+                app.updateGlobalStats(record); 
+                const newHistory = [record, ...window.appState.history];
+
+                const historyForDb = newHistory.map(h => {
+                    const clone = JSON.parse(JSON.stringify(h));
+                    if (clone.matches && Array.isArray(clone.matches)) {
+                        if (clone.matches.some(r => Array.isArray(r))) {
+                            clone.matches = JSON.stringify(clone.matches);
+                        }
+                    }
+                    return clone;
+                });
+
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', window.appState.channelId);
+                    await setDoc(docRef, { 
+                        history: historyForDb,
+                        stats: window.appState.stats,
+                        lastUpdate: new Date().toISOString()
+                    }, { merge: true });
+                    alert("Tournament Data Securely Archived.");
+                    app.resetUI();
+                    router.navigate('halloffame');
+                } catch(e) {
+                    console.error("Save Error", e);
+                    alert("Failed to save to cloud: " + e.message);
+                }
+            },
+
+            // ... (Stats Logic same as before) ...
+            updateGlobalStats: (record) => {
+                const gameName = record.game;
+                let allMatches = [];
+                if(record.groups) record.groups.forEach(g => allMatches.push(...g.matches));
+                if(record.matches) record.matches.forEach(r => allMatches.push(...r));
+
+                allMatches.forEach(m => {
+                    if(m.winner && m.p1 && m.p2 && m.p1 !== 'BYE' && m.p2 !== 'BYE' && !m.p1.includes('Winner G') && !m.p2.includes('Winner G')) {
+                        const loser = m.winner === m.p1 ? m.p2 : m.p1;
+                        app.initPlayerStats(m.winner);
+                        app.initPlayerStats(loser);
+
+                        const pW = window.appState.stats[m.winner];
+                        const pL = window.appState.stats[loser];
+                        
+                        const updateBlock = (block, won) => {
+                            const k = 32;
+                            const oppElo = won ? (pL.global.elo) : (pW.global.elo); 
+                            const myElo = block.elo;
+                            const expected = 1 / (1 + Math.pow(10, (oppElo - myElo) / 400));
+                            const actual = won ? 1 : 0;
+                            block.elo = Math.round(block.elo + k * (actual - expected));
+                            if(won) block.wins++; else block.losses++;
+                        };
+
+                        if(pW && pL) {
+                            if(!pW.games[gameName]) pW.games[gameName] = { elo: 1200, wins: 0, losses: 0 };
+                            if(!pL.games[gameName]) pL.games[gameName] = { elo: 1200, wins: 0, losses: 0 };
+                            updateBlock(pW.global, true);
+                            updateBlock(pL.global, false);
+                            updateBlock(pW.games[gameName], true);
+                            updateBlock(pL.games[gameName], false);
+                        }
+                    }
+                });
+            },
+
+            resetUI: () => {
+                document.getElementById('empty-state').style.display = 'block';
+                document.getElementById('groups-container').innerHTML = '';
+                document.getElementById('groups-container').classList.add('hidden');
+                const bracketCanvas = document.getElementById('bracket-canvas');
+                if(bracketCanvas) bracketCanvas.innerHTML = '';
+                document.getElementById('bracket-container').classList.add('hidden');
+                document.getElementById('page-title').innerText = "ACTIVE TOURNAMENT";
+                document.getElementById('page-title').classList.remove('text-red-500');
+                const btn = document.getElementById('btn-state');
+                btn.innerText = "START";
+                btn.onclick = app.generateTournament;
+                btn.className = "w-1/2 mx-auto py-2 rounded-2xl bg-gradient-to-r from-tactical-green to-emerald-600 text-black font-header font-bold text-xs hover:brightness-110 active:scale-95 transition-all shadow-glow-green uppercase tracking-widest relative z-[200] cursor-pointer";
+                btn.classList.remove('hidden'); 
+                window.appState.tournament.active = false;
+            },
+
+            resetConfig: () => {
+                 document.getElementById('sel-game').selectedIndex = 0;
+                document.getElementById('sel-type').selectedIndex = 0;
+            },
+
+            calculateStatsFromHistory: (historySubset) => {
+                // Sort chronological to ensure ELO flows correctly
+                const sortedHistory = [...historySubset].sort((a,b) => new Date(a.id) - new Date(b.id));
+                
+                const tempStats = {};
+                
+                const initP = (name) => {
+                    if(!tempStats[name]) tempStats[name] = {
+                        global: { elo: 1200, wins: 0, losses: 0 },
+                        games: {},
+                        tourneyWins: 0, // Global total
+                        tourneyWinsByGame: {} // Per-game total
+                    };
+                };
+
+                const updateBlock = (block, won, oppElo) => {
+                    const k = 32;
+                    const myElo = block.elo;
+                    const expected = 1 / (1 + Math.pow(10, (oppElo - myElo) / 400));
+                    const actual = won ? 1 : 0;
+                    block.elo = Math.round(block.elo + k * (actual - expected));
+                    if(won) block.wins++; else block.losses++;
+                };
+
+                sortedHistory.forEach(record => {
+                    const gameName = record.game;
+                    
+                    // Track Tournament Wins
+                    if (record.winner) {
+                        initP(record.winner);
+                        tempStats[record.winner].tourneyWins++;
+                        
+                        // Per-Game Tracking
+                        if (!tempStats[record.winner].tourneyWinsByGame[gameName]) {
+                            tempStats[record.winner].tourneyWinsByGame[gameName] = 0;
+                        }
+                        tempStats[record.winner].tourneyWinsByGame[gameName]++;
+                    }
+
+                    let allMatches = [];
+                    if(record.groups) record.groups.forEach(g => allMatches.push(...g.matches));
+                    if(record.matches) {
+                         if(Array.isArray(record.matches)) {
+                             record.matches.forEach(r => {
+                                 if(Array.isArray(r)) allMatches.push(...r);
+                                 else allMatches.push(r);
+                             });
+                         }
+                    }
+
+                    allMatches.forEach(m => {
+                        if(m.winner && m.p1 && m.p2 && m.p1 !== 'BYE' && m.p2 !== 'BYE' && !m.p1.includes('Winner G') && !m.p2.includes('Winner G')) {
+                            const winner = m.winner;
+                            const loser = m.winner === m.p1 ? m.p2 : m.p1;
+                            
+                            initP(winner);
+                            initP(loser);
+
+                            const pW = tempStats[winner];
+                            const pL = tempStats[loser];
+
+                            if(!pW.games[gameName]) pW.games[gameName] = { elo: 1200, wins: 0, losses: 0 };
+                            if(!pL.games[gameName]) pL.games[gameName] = { elo: 1200, wins: 0, losses: 0 };
+
+                            const wGlobalElo = pW.global.elo;
+                            const lGlobalElo = pL.global.elo;
+                            const wGameElo = pW.games[gameName].elo;
+                            const lGameElo = pL.games[gameName].elo;
+
+                            updateBlock(pW.global, true, lGlobalElo);
+                            updateBlock(pL.global, false, wGlobalElo);
+                            
+                            updateBlock(pW.games[gameName], true, lGameElo);
+                            updateBlock(pL.games[gameName], false, wGameElo);
+                        }
+                    });
+                });
+                
+                return tempStats;
+            },
+
+            // --- SORT LOGIC ---
+            sortHOF: (col) => {
+                const s = window.appState.ui;
+                if(s.hofSort === col) {
+                    s.hofDir = s.hofDir === 'desc' ? 'asc' : 'desc';
+                } else {
+                    s.hofSort = col;
+                    s.hofDir = 'desc'; 
+                    // Set default directions based on column type
+                    if(col === 'name' || col === 'rank') s.hofDir = 'asc';
+                    if(col === 'elo' || col === 'wins' || col === 'ratio' || col === 'tourney') s.hofDir = 'desc';
+                }
+                app.renderHOF();
+            },
+
+            renderHOF: () => {
+                const container = document.getElementById('hof-container');
+                if (!window.appState.connected) {
+                    container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-zinc-500"><i class="fas fa-lock text-4xl mb-4"></i><p>SECURE CHANNEL REQUIRED</p></div>`;
+                    return;
+                }
+                
+                const yearSelect = document.getElementById('hof-filter-year');
+                if(yearSelect && yearSelect.options.length <= 1) {
+                    const years = [...new Set(window.appState.history.map(h => new Date(h.id).getFullYear()))];
+                    years.sort((a,b) => b-a).forEach(y => {
+                        yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+                    });
+                }
+
+                // Helper for sort arrows
+                const getSortIcon = (col) => {
+                    if (window.appState.ui.hofSort !== col) return '<i class="fas fa-sort text-zinc-600 ml-1 text-[8px]"></i>';
+                    return window.appState.ui.hofDir === 'asc' 
+                        ? '<i class="fas fa-sort-up text-tactical-green ml-1 text-[8px]"></i>' 
+                        : '<i class="fas fa-sort-down text-tactical-green ml-1 text-[8px]"></i>';
+                };
+
+                container.innerHTML = `
+                    <div class="flex flex-col h-full overflow-hidden">
+                        <div class="grid grid-cols-8 bg-white/5 p-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-white/5 flex-shrink-0 select-none">
+                            <div class="col-span-1 pl-4 cursor-pointer hover:text-white transition-colors" onclick="app.sortHOF('rank')">Rank ${getSortIcon('rank')}</div>
+                            <div class="col-span-2 cursor-pointer hover:text-white transition-colors" onclick="app.sortHOF('name')">Commander ${getSortIcon('name')}</div>
+                            <div class="text-center cursor-pointer hover:text-tactical-gold transition-colors" onclick="app.sortHOF('tourney')">T. Wins ${getSortIcon('tourney')}</div>
+                            <div class="text-right cursor-pointer hover:text-white transition-colors" onclick="app.sortHOF('global')">Global ELO ${getSortIcon('global')}</div>
+                            <div class="text-right cursor-pointer hover:text-white transition-colors" onclick="app.sortHOF('specific')">Game ELO ${getSortIcon('specific')}</div>
+                            <div class="text-right cursor-pointer hover:text-white transition-colors" onclick="app.sortHOF('wl')">Win/Loss ${getSortIcon('wl')}</div>
+                            <div class="text-right pr-4 cursor-pointer hover:text-white transition-colors" onclick="app.sortHOF('ratio')">Ratio ${getSortIcon('ratio')}</div>
+                        </div>
+                        <div id="hof-list" class="flex-1 overflow-y-auto scroller pb-32 min-h-0"></div> 
+                    </div>
+                `;
+                
+                const search = document.getElementById('hof-search').value.toLowerCase();
+                const gameFilter = document.getElementById('hof-filter-game').value;
+                const yearFilter = document.getElementById('hof-filter-year').value;
+                const list = document.getElementById('hof-list');
+
+                // 1. Filter History by Year
+                const filteredHistory = window.appState.history.filter(h => {
+                    if (yearFilter === 'ALL') return true;
+                    return new Date(h.id).getFullYear().toString() === yearFilter;
+                });
+
+                // 2. Calculate Stats from Filtered History
+                const computedStats = app.calculateStatsFromHistory(filteredHistory);
+
+                // 3. FULL PIPELINE to determine TRUE RANK before filtering by name
+                // Convert to array
+                let statsArray = Object.entries(computedStats).map(([name, data]) => {
+                    let globalElo = data.global.elo;
+                    let wins, losses;
+                    let specificElo = 0;
+                    let specificGameName = "";
+                    let tourneyWins = 0;
+
+                    if (gameFilter === 'Global') {
+                        wins = data.global.wins;
+                        losses = data.global.losses;
+                        tourneyWins = data.tourneyWins; // Global Total
+                        let max = -1;
+                        Object.entries(data.games).forEach(([gName, gData]) => {
+                            if(gData.elo > max) { max = gData.elo; specificGameName = gName; }
+                        });
+                        specificElo = max > -1 ? max : 1200;
+                        if(max === -1) specificGameName = "-";
+                    } else {
+                        const gData = data.games[gameFilter] || { elo: 1200, wins: 0, losses: 0 };
+                        wins = gData.wins;
+                        losses = gData.losses;
+                        specificElo = gData.elo;
+                        specificGameName = gameFilter;
+                        // Game Specific Total
+                        tourneyWins = data.tourneyWinsByGame[gameFilter] || 0; 
+                    }
+                    return { name, globalElo, specificElo, specificGameName, wins, losses, tourneyWins };
+                });
+
+                // 4. SORT BY ELO DESCENDING to determine TRUE RANK
+                statsArray.sort((a,b) => {
+                    let valA = gameFilter === 'Global' ? a.globalElo : a.specificElo;
+                    let valB = gameFilter === 'Global' ? b.globalElo : b.specificElo;
+                    return valB - valA;
+                });
+
+                // 5. ASSIGN TRUE RANK property
+                statsArray.forEach((item, index) => {
+                    item.trueRank = index + 1;
+                });
+
+                // 6. FILTER by Search (Rank is preserved)
+                if (search) {
+                    statsArray = statsArray.filter(s => s.name.toLowerCase().includes(search));
+                }
+
+                // 7. SORT by UI Columns
+                const sCol = window.appState.ui.hofSort;
+                const sDir = window.appState.ui.hofDir;
+                
+                statsArray.sort((a,b) => {
+                    let valA, valB;
+                    switch(sCol) {
+                        case 'rank': valA = a.trueRank; valB = b.trueRank; break;
+                        case 'name': valA = a.name.toLowerCase(); valB = b.name.toLowerCase(); break;
+                        case 'tourney': valA = a.tourneyWins; valB = b.tourneyWins; break;
+                        case 'global': valA = a.globalElo; valB = b.globalElo; break;
+                        case 'specific': valA = a.specificElo; valB = b.specificElo; break;
+                        case 'wl': valA = a.wins; valB = b.wins; break;
+                        case 'ratio': 
+                            valA = (a.wins+a.losses) > 0 ? a.wins/(a.wins+a.losses) : 0; 
+                            valB = (b.wins+b.losses) > 0 ? b.wins/(b.wins+b.losses) : 0; 
+                            break;
+                        default: valA = a.trueRank; valB = b.trueRank;
+                    }
+                    
+                    if (typeof valA === 'string') {
+                        return sDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    }
+                    return sDir === 'asc' ? valA - valB : valB - valA;
+                });
+                
+                // 8. Slice Top 500
+                const topList = statsArray.slice(0, 500);
+
+                list.innerHTML = topList.map((s) => {
+                    const ratio = (s.wins + s.losses) > 0 ? ((s.wins / (s.wins+s.losses))*100).toFixed(0) + '%' : '-';
+                    return `
+                        <div class="grid grid-cols-8 p-1.5 border-b border-white/5 items-center hover:bg-white/5 transition-colors text-sm font-mono text-zinc-300">
+                            <div class="col-span-1 pl-4 text-tactical-gold font-bold">#${s.trueRank}</div>
+                            <div class="col-span-2 text-white font-sans font-medium truncate pr-2">${s.name}</div>
+                            <div class="text-center text-tactical-gold font-bold">${s.tourneyWins > 0 ? '<i class="fas fa-trophy mr-1 text-[10px]"></i>'+s.tourneyWins : '-'}</div>
+                            <div class="text-right text-tactical-green font-bold">${s.globalElo}</div>
+                            <div class="text-right text-zinc-500">${s.specificElo} <span class="text-[9px] text-zinc-600 block">${s.specificGameName}</span></div>
+                            <div class="text-right text-xs"><span class="text-tactical-green">${s.wins}</span> / <span class="text-red-400">${s.losses}</span></div>
+                            <div class="text-right pr-4 text-zinc-500">${ratio}</div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            renderArchiveGrid: () => {
+                // ... same logic ...
+                const container = document.getElementById('archive-container');
+                if (!window.appState.connected) {
+                    container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-zinc-500"><i class="fas fa-lock text-4xl mb-4"></i><p>SECURE CHANNEL REQUIRED</p></div>`;
+                    return;
+                }
+                container.innerHTML = `<div id="archive-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 overflow-y-scroll scroller h-full pb-20 content-start" style="overflow-y: scroll;"></div>`;
+                const grid = document.getElementById('archive-grid');
+                const filterGame = document.getElementById('arch-filter-game') ? document.getElementById('arch-filter-game').value : 'ALL';
+                const filterType = document.getElementById('arch-filter-type') ? document.getElementById('arch-filter-type').value : 'ALL';
+                const filterYear = document.getElementById('arch-filter-year') ? document.getElementById('arch-filter-year').value : 'ALL';
+                const yearSelect = document.getElementById('arch-filter-year');
+                if(yearSelect && yearSelect.options.length <= 1) {
+                    const years = [...new Set(window.appState.history.map(h => new Date(h.id).getFullYear()))];
+                    years.sort((a,b) => b-a).forEach(y => {
+                        yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+                    });
+                }
+                const filteredHistory = window.appState.history.filter(h => {
+                    const hYear = new Date(h.id).getFullYear().toString();
+                    if(filterGame !== 'ALL' && h.game !== filterGame) return false;
+                    if(filterType !== 'ALL' && h.type !== filterType) return false;
+                    if(filterYear !== 'ALL' && hYear !== filterYear) return false;
+                    return true;
+                });
+                grid.innerHTML = filteredHistory.map(h => {
+                    const playerCount = h.playerCount || (h.matches && h.matches[0] ? h.matches[0].length * 2 : 0);
+                    return `
+                    <div onclick="app.viewArchiveItem(${h.id})" class="glass-panel p-4 cursor-pointer hover:border-tactical-green transition-colors group relative overflow-hidden h-40 flex flex-col justify-between">
+                        <div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fas fa-microchip text-6xl"></i></div>
+                        <div>
+                            <h4 class="font-header text-white text-sm truncate">${h.game}</h4>
+                            <p class="text-[10px] text-zinc-500 font-mono">${new Date(h.id).toLocaleDateString()}</p>
+                        </div>
+                        <div class="flex items-end justify-between">
+                            <div class="flex flex-col">
+                                <span class="text-[10px] uppercase text-zinc-600">Winner</span>
+                                <span class="text-sm font-bold text-tactical-gold">${h.winner || 'Unknown'}</span>
+                            </div>
+                            <div class="flex flex-col items-end gap-1">
+                                <div class="text-[10px] text-zinc-600 bg-white/5 px-2 py-1 rounded">
+                                    ${h.type === 'groups' ? 'GROUP' : h.type.toUpperCase()}
+                                </div>
+                                <span class="text-[9px] text-tactical-green bg-green-500/10 px-2 rounded-full">${playerCount} Players</span>
+                            </div>
+                        </div>
+                    </div>
+                `}).join(''); // Added .join('') to fix grid layout bugs
+            },
+
+            viewArchiveItem: (id) => {
+                const item = window.appState.history.find(h => h.id === id);
+                if(!item) return;
+                const overlay = document.getElementById('archive-overlay');
+                const content = document.getElementById('archive-viewer-content');
+                const title = document.getElementById('archive-title');
+                const typeMap = { 'single': 'Single Elimination', 'groups': 'Group' };
+                const fullTitle = `CnCNet | ${item.game} | ${item.format} | ${typeMap[item.type] || item.type} | ${new Date(item.id).toLocaleDateString()}`;
+                title.innerText = fullTitle;
+                overlay.classList.remove('hidden');
+                overlay.style.display = 'flex';
+                content.innerHTML = '';
+                
+                // USE THE NEW PANEL RENDERER
+                if (item.type === 'groups') {
+                    // Create element explicitly
+                    const groupsContainer = document.createElement('div');
+                    groupsContainer.id = 'archive-groups-view';
+                    
+                    // Logic: If there is NO bracket (just 1 group or no playoffs), show trophy in table
+                    const hasBracket = item.matches && item.matches.length > 0 && item.groups.length > 1; // Basic heuristic
+                    const showGroupTrophy = !hasBracket && item.groups.length === 1;
+
+                    app.renderGroupPanels(item.groups, groupsContainer, item.winner, showGroupTrophy);
+                    content.appendChild(groupsContainer);
+
+                    // Only show brackets if it's NOT a single-group tournament
+                    if (hasBracket) {
+                         const panelContainer = document.createElement('div');
+                         panelContainer.id = 'archive-bracket-view'; // This ID is what export uses
+                         panelContainer.className = 'w-full mt-8'; 
+                         content.appendChild(panelContainer);
+                         // Render Bracket
+                         app.renderBracketPanels(item.matches, panelContainer, false, true); // Pass element directly
+                    }
+                } else {
+                     const panelContainer = document.createElement('div');
+                     panelContainer.id = 'archive-bracket-view';
+                     panelContainer.className = 'w-full';
+                     content.appendChild(panelContainer);
+                     app.renderBracketPanels(item.matches, panelContainer, false);
+                }
+            },
+            
+            exportArchivePDF: async () => {
+                const titleText = document.getElementById('archive-title').innerText;
+                const fileName = titleText.replace(/ \| /g, '-').replace(/\//g, '-').replace(/ /g, '_') + '.pdf';
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('l', 'mm', 'a4'); 
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+
+                const captureAndAdd = async (element, isNewPage) => {
+                     if (isNewPage) pdf.addPage();
+                     pdf.setFillColor(24, 24, 27); pdf.rect(0, 0, pdfWidth, pdfHeight, "F");
+                     pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(14);
+                     pdf.text(titleText, 10, 15);
+
+                     // CLONE Strategy for Full Capture - ABSOLUTE to Body with Scroll Reset
+                     // We must scroll to top to ensure html2canvas captures correctly if using absolute
+                     const scrollX = window.scrollX;
+                     const scrollY = window.scrollY;
+                     window.scrollTo(0, 0);
+
+                     const clone = element.cloneNode(true);
+                     const wrapper = document.createElement('div');
+                     wrapper.style.position = 'absolute';
+                     wrapper.style.top = '0';
+                     wrapper.style.left = '0';
+                     wrapper.style.zIndex = '2147483647'; // MAX Z-Index
+                     wrapper.style.width = '1200px'; 
+                     wrapper.style.backgroundColor = '#18181b'; 
+                     wrapper.style.padding = '20px';
+                     wrapper.appendChild(clone);
+                     
+                     // Remove truncate from names in PDF to show full text
+                     const spans = clone.querySelectorAll('span.truncate');
+                     spans.forEach(s => s.classList.remove('truncate'));
+
+                     document.body.appendChild(wrapper);
+                     
+                     // Wait for render
+                     await new Promise(r => setTimeout(r, 200));
+                     
+                     try {
+                        const canvas = await html2canvas(wrapper, { 
+                            backgroundColor: '#18181b', 
+                            scale: 2,
+                            useCORS: true,
+                            logging: false,
+                            windowWidth: 1600,
+                            scrollY: 0
+                        });
+                        
+                        const imgData = canvas.toDataURL('image/png');
+                        const imgProps = pdf.getImageProperties(imgData);
+                        const ratio = imgProps.width / imgProps.height;
+                        
+                        const margin = 10;
+                        const titleHeight = 20;
+                        const availWidth = pdfWidth - (margin * 2);
+                        const availHeight = pdfHeight - (margin * 2) - titleHeight;
+                        
+                        let w, h;
+                        const pageRatio = availWidth / availHeight;
+                        if(ratio > pageRatio) {
+                            w = availWidth;
+                            h = availWidth / ratio;
+                        } else {
+                            h = availHeight;
+                            w = h * ratio;
+                        }
+                        const x = (pdfWidth - w) / 2;
+                        const y = titleHeight + ((availHeight - h) / 2); // Center vertically
+                        pdf.addImage(imgData, 'PNG', x, y, w, h);
+                     } catch(e) { console.error("PDF Capture Error", e); }
+                     finally { 
+                        document.body.removeChild(wrapper); 
+                        window.scrollTo(scrollX, scrollY);
+                     }
+                };
+                
+                // Get all panels inside the viewer content
+                // Note: renderGroupPanels creates divs with class 'bracket-panel' too. 
+                // So querySelectorAll('.bracket-panel') gets everything needed.
+                const panels = document.querySelectorAll('#archive-viewer-content .bracket-panel');
+                
+                if (panels.length === 0) {
+                    alert("No content to export found.");
+                    return;
+                }
+
+                for (let i = 0; i < panels.length; i++) {
+                     await captureAndAdd(panels[i], i > 0);
+                }
+
+                pdf.save(fileName);
+            }
+        };
+        
+        // ... (getGroupName and getVisualSeedOrder functions) ...
+        const getGroupName = (index) => {
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            if (index < 26) return letters[index];
+            return letters[Math.floor(index / 26) - 1] + letters[index % 26];
+        };
+
+        function getVisualSeedOrder(numPlayers) {
+            let rounds = Math.log2(numPlayers);
+            let seeds = [1, 2];
+            for (let i = 0; i < rounds - 1; i++) {
+                let next = [];
+                seeds.forEach((s, idx) => {
+                    let pairSum = (seeds.length * 2) + 1;
+                    if (idx % 2 === 0) {
+                        next.push(s);
+                        next.push(pairSum - s);
+                    } else {
+                        next.push(pairSum - s);
+                        next.push(s);
+                    }
+                });
+                seeds = next;
+            }
+            return seeds.map(s => s - 1); // convert to 0-based index
+        }
+    </script>
+</body>
+</html>
