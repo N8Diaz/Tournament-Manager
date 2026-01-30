@@ -1,13 +1,12 @@
 # Tournament-Manager
 A tournament system
-CnCNet AI Command | Tactical Interface
 
 Version: 1.0 
 Type: Single-File Web Application (SPA)
 
 📋 Overview
 
-CnCNet AI Command is a tactical, cyberpunk-styled tournament management system designed to run entirely within a web browser. It serves as a comprehensive tool for organising gaming tournaments, specifically tailored for Command & Conquer but adaptable to any competitive game.
+This is a tactical, cyberpunk-styled tournament management system designed to run entirely within a web browser. It serves as a comprehensive tool for organising gaming tournaments, specifically tailored for Command & Conquer but adaptable to any competitive game.
 
 The application leverages Firebase Firestore for real-time data persistence and utilises CryptoJS to implement a client-side AES encryption layer for channel access.
 
